@@ -15,10 +15,10 @@ std::unordered_map and std::unordered_set will stay the same as long as the valu
 exists in the map / set.  That is very much NOT true with these, due to the
 nature of open address hash tables, they will be changed on a rehash.
 
-There has been very little micro-optimization done, these are actually possibly
-the simplest robin hood hash tables you would reasonably write.  Still, they are
-much faster than std::unordered_map and std::unordered_set, at least for
-Starbound and also in my informal testing.
+There has been very little micro-optimization done, these are mostly written to
+just be as simple and obvious as possible.  Still, they are much faster than
+std::unordered_map and std::unordered_set, at least for Starbound and also in
+my informal testing.
 
 If you're looking for the fastest possible hashtable, these are probably not it.
 They are however simple, compatible, header-only, (hopefully) drop-in
@@ -35,3 +35,9 @@ BAD PARTS
 - I spent very little effort thinking about extreme corner case behavior like
   throwing move constructors etc, so there are probably limitations there in
   comparison to the versions in the standard library.
+
+- The bucket vector size is always a power of two, there is nothing clever
+  going on like using prime number bucket counts or anything like that to get
+  around a bad std::hash implementation.  It is possible that, especially with
+  the default hash functions on integers in c++ that this may cause problems
+  for certiain key sets.  Use a good hash function!
