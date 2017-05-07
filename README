@@ -22,15 +22,15 @@ my informal testing.
 
 If you're looking for the fastest possible hashtable, these are probably not it.
 They are however simple, compatible, header-only, (hopefully) drop-in
-replacements for the standard library implementations that seem to be much
-faster.
+replacements for the standard library implementations.
 
 BAD PARTS
 =========
 
-- The included "tests" are are absolute garbage, and there are no performance
-  tests whatsoever, because like I said I extracted this from a larger codebase.
-  Eventually I might actually write those.
+- The included "tests" are are absolute garbage, and there are NO performance
+  tests whatsoever.  The performance testing I DID do was mostly inside
+  Starbound, where there was a measurable improvement.  These desperately need
+  real benchmarks!
 
 - I spent very little effort thinking about extreme corner case behavior like
   throwing move constructors etc, so there are probably limitations there in
