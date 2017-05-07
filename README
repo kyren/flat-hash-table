@@ -1,0 +1,37 @@
+This is an implementation of a c++ hash set / map using open addressing and
+robin hood hashing.  It is a zero-dependency copy of the implementation I wrote
+for Starbound.
+
+It has three main design goals, roughly in inverse order of importance:
+
+- Be faster than std::unordered_map and std::unordered_set
+- Be as compatible with std::unordered_map and std::unordered_set as possible
+- Don't be clever
+
+It contains a MOSTLY compatible re-implementation of std::unordered_map and
+std::unordered_set, with the main exception being pointer stability.  With the
+standard implementations, one may assume that the pointers to keys and values in
+std::unordered_map and std::unordered_set will stay the same as long as the value
+exists in the map / set.  That is very much NOT true with these, due to the
+nature of open address hash tables, they will be changed on a rehash.
+
+There has been very little micro-optimization done, these are actually possibly
+the simplest robin hood hash tables you would reasonably write.  Still, they are
+much faster than std::unordered_map and std::unordered_set, at least for
+Starbound and also in my informal testing.
+
+If you're looking for the fastest possible hashtable, these are probably not it.
+They are however simple, compatible, header-only, (hopefully) drop-in
+replacements for the standard library implementations that seem to be much
+faster.
+
+BAD PARTS
+=========
+
+- The included "tests" are are absolute garbage, and there are no performance
+  tests whatsoever, because like I said I extracted this from a larger codebase.
+  Eventually I might actually write those.
+
+- I spent very little effort thinking about extreme corner case behavior like
+  throwing move constructors etc, so there are probably limitations there in
+  comparison to the versions in the standard library.
