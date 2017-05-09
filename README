@@ -1,5 +1,5 @@
 This is an implementation of a c++ hash set / map using open addressing, linear
-probing, and robin hood hashing.  It is a zero-dependency copy of the
+probing, and robin hood bucket stealing.  It is a zero-dependency copy of the
 implementation I wrote for Starbound.
 
 It has three main design goals, roughly in inverse order of importance:
