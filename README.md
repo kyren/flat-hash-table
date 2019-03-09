@@ -22,8 +22,7 @@ There has been very little micro-optimization done, these are mostly written to
 just be simple.  Still, they are, at least for Starbound, much faster than
 std::unordered_map and std::unordered_set (because it's not hard!).
 
-BAD PARTS
-=========
+## BAD PARTS ##
 
 - **Probably don't use this for anything important or depend on this repo!** It
   may however be useful for educational purposes for how to implement hash sets
@@ -46,8 +45,7 @@ BAD PARTS
   very easy to implement that are missing simply because Starbound didn't use
   them.
 
-WHY DID YOU EVEN DO THIS
-========================
+## WHY DID YOU EVEN DO THIS ##
 
 I'm sure there are better hash tables, in fact I tried a lot of them first.  I
 had a specific hard requirement that the type be compatible with
@@ -68,3 +66,14 @@ own hashmap.
 
 I have very bad NIH syndrome sometimes, and an occasional inability to
 understand something until I do it myself.
+
+## License ##
+
+This code is licensed under either of:
+
+* MIT license [LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT
+* Creative Commons CC0 1.0 Universal Public Domain Dedication
+  [LICENSE-CC0](LICENSE-CC0) or
+  https://creativecommons.org/publicdomain/zero/1.0/
+
+at your option.
