@@ -25,10 +25,13 @@ std::unordered_map and std::unordered_set (because it's not hard!).
 BAD PARTS
 =========
 
-- The included "tests" are are absolute garbage, and there are NO performance
-  tests whatsoever.  The performance testing I DID do was mostly inside
-  Starbound, where there was a measurable improvement.  These desperately need
-  real benchmarks!
+- **Probably don't use this for anything important or depend on this repo!** It
+  may however be useful for educational purposes for how to implement hash sets
+  / maps in C++, or as a starting point for your own.
+
+- The included "tests" are are basically non-existent, and there are NO
+  performance tests whatsoever.  The performance testing I DID do was mostly
+  inside Starbound, where there was a measurable improvement.
 
 - I spent very little effort thinking about extreme corner case behavior like
   throwing move constructors etc, so there are definitely limitations there.
@@ -37,7 +40,7 @@ BAD PARTS
   going on like using prime number bucket counts or anything like that to get
   around a bad std::hash implementation.  It is possible that, especially with
   the default hash functions on integers in c++ that this may cause problems
-  for certiain key sets.  Use a good hash function!
+  for certiain key sets.
 
 - Even though the point was compatibility, there are some methods that would be
   very easy to implement that are missing simply because Starbound didn't use

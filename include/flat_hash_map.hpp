@@ -410,7 +410,7 @@ template <typename InputIt>
 void hash_map<Key, Mapped, Hash, Equals, Allocator>::insert(InputIt first, InputIt last) {
   m_table.reserve(m_table.size() + std::distance(first, last));
   for (auto i = first; i != last; ++i)
-    insert(*i);
+    m_table.insert(*i);
 }
 
 template <typename Key, typename Mapped, typename Hash, typename Equals, typename Allocator>
@@ -442,9 +442,9 @@ auto hash_map<Key, Mapped, Hash, Equals, Allocator>::erase(const_iterator first,
 
 template <typename Key, typename Mapped, typename Hash, typename Equals, typename Allocator>
 size_t hash_map<Key, Mapped, Hash, Equals, Allocator>::erase(key_type const& key) {
-  auto i = find(key);
-  if (i != end()) {
-    erase(i);
+  auto i = m_table.find(key);
+  if (i != m_table.end()) {
+    m_table.erase(i);
     return 1;
   }
   return 0;
@@ -452,39 +452,39 @@ size_t hash_map<Key, Mapped, Hash, Equals, Allocator>::erase(key_type const& key
 
 template <typename Key, typename Mapped, typename Hash, typename Equals, typename Allocator>
 auto hash_map<Key, Mapped, Hash, Equals, Allocator>::at(key_type const& key) -> mapped_type& {
-  auto i = find(key);
-  if (i == end())
+  auto i = m_table.find(key);
+  if (i == m_table.end())
     throw std::out_of_range("no such key in hash_map");
   return i->second;
 }
 
 template <typename Key, typename Mapped, typename Hash, typename Equals, typename Allocator>
 auto hash_map<Key, Mapped, Hash, Equals, Allocator>::at(key_type const& key) const -> mapped_type const& {
-  auto i = find(key);
-  if (i == end())
+  auto i = m_table.find(key);
+  if (i == m_table.end())
     throw std::out_of_range("no such key in hash_map");
   return i->second;
 }
 
 template <typename Key, typename Mapped, typename Hash, typename Equals, typename Allocator>
 auto hash_map<Key, Mapped, Hash, Equals, Allocator>::operator[](key_type const& key) -> mapped_type& {
-  auto i = find(key);
-  if (i != end())
+  auto i = m_table.find(key);
+  if (i != m_table.end())
     return i->second;
-  return insert({key, mapped_type()}).first->second;
+  return m_table.insert({key, mapped_type()}).first->second;
 }
 
 template <typename Key, typename Mapped, typename Hash, typename Equals, typename Allocator>
 auto hash_map<Key, Mapped, Hash, Equals, Allocator>::operator[](key_type&& key) -> mapped_type& {
-  auto i = find(key);
-  if (i != end())
+  auto i = m_table.find(key);
+  if (i != m_table.end())
     return i->second;
-  return insert({move(key), mapped_type()}).first->second;
+  return m_table.insert({move(key), mapped_type()}).first->second;
 }
 
 template <typename Key, typename Mapped, typename Hash, typename Equals, typename Allocator>
 size_t hash_map<Key, Mapped, Hash, Equals, Allocator>::count(key_type const& key) const {
-  if (find(key) != end())
+  if (m_table.find(key) != m_table.end())
     return 1;
   else
     return 0;

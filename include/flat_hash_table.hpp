@@ -32,10 +32,10 @@ private:
     bool isEmpty() const;
     bool isEnd() const;
 
-    size_t hash;
     union {
       Value value;
     };
+    size_t hash;
   };
 
   typedef std::vector<Bucket, typename Allocator::template rebind<Bucket>::other> Buckets;
@@ -51,7 +51,7 @@ public:
     Value const& operator*() const;
     Value const* operator->() const;
 
-    typename Buckets::const_iterator current;
+    Bucket const* current;
   };
 
   struct iterator {
@@ -66,7 +66,7 @@ public:
 
     operator const_iterator() const;
 
-    typename Buckets::iterator current;
+    Bucket* current;
   };
 
   hash_table(size_t bucketCount, GetKey const& getKey, Hash const& hash, Equals const& equal, Allocator const& alloc);
@@ -81,17 +81,13 @@ public:
   size_t size() const;
   void clear();
 
-  std::pair<iterator, bool> insert(Value const& value);
-  std::pair<iterator, bool> insert(Value&& value);
+  std::pair<iterator, bool> insert(Value value);
 
   iterator erase(const_iterator pos);
   iterator erase(const_iterator first, const_iterator last);
 
   const_iterator find(Key const& key) const;
   iterator find(Key const& key);
-
-  double maxFillLevel() const;
-  void setMaxFillLevel(double maxFillLevel);
 
   void reserve(size_t capacity);
   Allocator getAllocator() const;
@@ -101,19 +97,17 @@ public:
 
 private:
   static constexpr size_t MinCapacity = 8;
-  static constexpr double DefaultMaxFillLevel = 0.7;
+  static constexpr double MaxFillLevel = 0.7;
 
   // Scans for the next bucket value that is non-empty
-  static typename Buckets::iterator scanIterator(typename Buckets::iterator i);
-  static typename Buckets::const_iterator scanIterator(typename Buckets::const_iterator i);
+  static Bucket* scan(Bucket* p);
+  static Bucket const* scan(Bucket const* p);
 
   size_t hashBucket(size_t hash) const;
   size_t bucketError(size_t current, size_t target) const;
   void checkCapacity(size_t additionalCapacity);
-  std::pair<iterator, bool> doInsert(Value value);
 
   Buckets m_buckets;
-  double m_maxFillLevel;
   size_t m_filledCount;
 
   GetKey m_getKey;
@@ -235,7 +229,7 @@ bool hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::const_iterator::op
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::const_iterator::operator++() -> const_iterator& {
-  current = hash_table::scanIterator(++current);
+  current = scan(++current);
   return *this;
 }
 
@@ -268,7 +262,7 @@ bool hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::iterator::operator
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::iterator::operator++() -> iterator& {
-  current = hash_table::scanIterator(++current);
+  current = scan(++current);
   return *this;
 }
 
@@ -297,7 +291,7 @@ hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::iterator::operator type
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::hash_table(size_t bucketCount,
     GetKey const& getKey, Hash const& hash, Equals const& equal, Allocator const& alloc)
-  : m_buckets(alloc), m_maxFillLevel(DefaultMaxFillLevel), m_filledCount(0), m_getKey(getKey),
+  : m_buckets(alloc), m_filledCount(0), m_getKey(getKey),
     m_hash(hash), m_equals(equal) {
   if (bucketCount != 0)
     checkCapacity(bucketCount);
@@ -307,12 +301,12 @@ template <typename Value, typename Key, typename GetKey, typename Hash, typename
 auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::begin() -> iterator {
   if (m_buckets.empty())
     return end();
-  return iterator{scanIterator(m_buckets.begin())};
+  return iterator{scan(m_buckets.data())};
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::end() -> iterator {
-  return iterator{--m_buckets.end()};
+  return iterator{m_buckets.data() + m_buckets.size() - 1};
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -346,18 +340,48 @@ void hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::clear() {
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::insert(Value const& value) -> std::pair<iterator, bool> {
-  return doInsert(Value(value));
-}
+auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::insert(Value value) -> std::pair<iterator, bool> {
+  if (m_buckets.empty() || m_filledCount + 1 > (m_buckets.size() - 1) * MaxFillLevel)
+    checkCapacity(1);
 
-template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::insert(Value&& value) -> std::pair<iterator, bool> {
-  return doInsert(std::move(value));
+  size_t hash = m_hash(m_getKey(value)) | FilledHashBit;
+  size_t targetBucket = hashBucket(hash);
+  size_t currentBucket = targetBucket;
+  size_t insertedBucket = NPos;
+
+  while (true) {
+    auto& target = m_buckets[currentBucket];
+    if (auto entryValue = target.valuePtr()) {
+      if (target.hash == hash && m_equals(m_getKey(*entryValue), m_getKey(value)))
+        return std::make_pair(iterator{m_buckets.data() + currentBucket}, false);
+
+      size_t entryTargetBucket = hashBucket(target.hash);
+      size_t entryError = bucketError(currentBucket, entryTargetBucket);
+      size_t addError = bucketError(currentBucket, targetBucket);
+      if (addError > entryError) {
+        if (insertedBucket == NPos)
+          insertedBucket = currentBucket;
+
+        std::swap(value, *entryValue);
+        std::swap(hash, target.hash);
+        targetBucket = entryTargetBucket;
+      }
+      currentBucket = hashBucket(currentBucket + 1);
+
+    } else {
+      target.setFilled(hash, std::move(value));
+      ++m_filledCount;
+      if (insertedBucket == NPos)
+        insertedBucket = currentBucket;
+
+      return std::make_pair(iterator{m_buckets.data() + insertedBucket}, true);
+    }
+  }
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::erase(const_iterator pos) -> iterator {
-  size_t bucketIndex = pos.current - m_buckets.begin();
+  size_t bucketIndex = pos.current - m_buckets.data();
   size_t currentBucketIndex = bucketIndex;
   auto currentBucket = &m_buckets[currentBucketIndex];
 
@@ -381,14 +405,14 @@ auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::erase(const_iterat
   m_buckets[currentBucketIndex].setEmpty();
   --m_filledCount;
 
-  return iterator{scanIterator(m_buckets.begin() + bucketIndex)};
+  return iterator{scan(m_buckets.data() + bucketIndex)};
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
 auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::erase(const_iterator first, const_iterator last) -> iterator {
   while (first != last)
     first = erase(first);
-  return iterator{m_buckets.begin() + (first.current - m_buckets.begin())};
+  return iterator{(Bucket*)first.current};
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -408,7 +432,7 @@ auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::find(Key const& ke
     auto& bucket = m_buckets[currentBucket];
     if (auto value = bucket.valuePtr()) {
       if (bucket.hash == hash && m_equals(m_getKey(*value), key))
-        return iterator{m_buckets.begin() + currentBucket};
+        return iterator{m_buckets.data() + currentBucket};
 
       size_t entryError = bucketError(currentBucket, bucket.hash);
       size_t findError = bucketError(currentBucket, targetBucket);
@@ -422,16 +446,6 @@ auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::find(Key const& ke
       return end();
     }
   }
-}
-
-template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-double hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::maxFillLevel() const {
-  return m_maxFillLevel;
-}
-
-template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-void hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::setMaxFillLevel(double maxFillLevel) {
-  m_maxFillLevel = maxFillLevel;
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -473,20 +487,20 @@ template <typename Value, typename Key, typename GetKey, typename Hash, typename
 constexpr size_t hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::MinCapacity;
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-constexpr double hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::DefaultMaxFillLevel;
+constexpr double hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::MaxFillLevel;
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::scanIterator(typename Buckets::iterator i) -> typename Buckets::iterator {
-  while (i->isEmpty())
-    ++i;
-  return i;
+auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::scan(Bucket* p) -> Bucket* {
+  while (p->isEmpty())
+    ++p;
+  return p;
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::scanIterator(typename Buckets::const_iterator i) -> typename Buckets::const_iterator {
-  while (i->isEmpty())
-    ++i;
-  return i;
+auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::scan(Bucket const* p) -> Bucket const* {
+  while (p->isEmpty())
+    ++p;
+  return p;
 }
 
 template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
@@ -507,7 +521,7 @@ void hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::checkCapacity(size
   else
     newSize = MinCapacity;
 
-  while ((double)(m_filledCount + additionalCapacity) / (double)newSize > m_maxFillLevel)
+  while ((double)(m_filledCount + additionalCapacity) / (double)newSize > MaxFillLevel)
     newSize *= 2;
 
   if (newSize == m_buckets.size() - 1)
@@ -520,6 +534,10 @@ void hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::checkCapacity(size
   // simpler and can simply iterate until they find something that is not an
   // empty entry.
   m_buckets.resize(newSize + 1);
+  while (m_buckets.capacity() > newSize * 2 + 1) {
+    newSize *= 2;
+    m_buckets.resize(newSize + 1);
+  }
   m_buckets[newSize].setEnd();
 
   m_filledCount = 0;
@@ -527,45 +545,6 @@ void hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::checkCapacity(size
   for (auto& entry : oldBuckets) {
     if (auto ptr = entry.valuePtr())
       insert(std::move(*ptr));
-  }
-}
-
-template <typename Value, typename Key, typename GetKey, typename Hash, typename Equals, typename Allocator>
-auto hash_table<Value, Key, GetKey, Hash, Equals, Allocator>::doInsert(Value value) -> std::pair<iterator, bool> {
-  checkCapacity(1);
-
-  size_t hash = m_hash(m_getKey(value)) | FilledHashBit;
-  size_t targetBucket = hashBucket(hash);
-  size_t currentBucket = targetBucket;
-  size_t insertedBucket = NPos;
-
-  while (true) {
-    auto& target = m_buckets[currentBucket];
-    if (auto entryValue = target.valuePtr()) {
-      if (target.hash == hash && m_equals(m_getKey(*entryValue), m_getKey(value)))
-        return std::make_pair(iterator{m_buckets.begin() + currentBucket}, false);
-
-      size_t entryTargetBucket = hashBucket(target.hash);
-      size_t entryError = bucketError(currentBucket, entryTargetBucket);
-      size_t addError = bucketError(currentBucket, targetBucket);
-      if (addError > entryError) {
-        if (insertedBucket == NPos)
-          insertedBucket = currentBucket;
-
-        std::swap(value, *entryValue);
-        std::swap(hash, target.hash);
-        targetBucket = entryTargetBucket;
-      }
-      currentBucket = hashBucket(currentBucket + 1);
-
-    } else {
-      target.setFilled(hash, std::move(value));
-      ++m_filledCount;
-      if (insertedBucket == NPos)
-        insertedBucket = currentBucket;
-
-      return std::make_pair(iterator{m_buckets.begin() + insertedBucket}, true);
-    }
   }
 }
 

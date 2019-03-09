@@ -395,7 +395,7 @@ template <typename InputIt>
 void hash_set<Key, Hash, Equals, Allocator>::insert(InputIt first, InputIt last) {
   m_table.reserve(m_table.size() + std::distance(first, last));
   for (auto i = first; i != last; ++i)
-    insert(*i);
+    m_table.insert(*i);
 }
 
 template <typename Key, typename Hash, typename Equals, typename Allocator>
@@ -427,9 +427,9 @@ auto hash_set<Key, Hash, Equals, Allocator>::erase(const_iterator first, const_i
 
 template <typename Key, typename Hash, typename Equals, typename Allocator>
 size_t hash_set<Key, Hash, Equals, Allocator>::erase(key_type const& key) {
-  auto i = find(key);
-  if (i != end()) {
-    erase(i);
+  auto i = m_table.find(key);
+  if (i != m_table.end()) {
+    m_table.erase(i);
     return 1;
   }
   return 0;
@@ -437,7 +437,7 @@ size_t hash_set<Key, Hash, Equals, Allocator>::erase(key_type const& key) {
 
 template <typename Key, typename Hash, typename Equals, typename Allocator>
 size_t hash_set<Key, Hash, Equals, Allocator>::count(Key const& key) const {
-  if (find(key) != end())
+  if (m_table.find(key) != m_table.end())
     return 1;
   else
     return 0;
